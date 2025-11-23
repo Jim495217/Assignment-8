@@ -1,90 +1,84 @@
-const { Sequelize, DataTypes } = require('sequelize');
-require('dotenv').config();
+const sequelize = require('../config/database');
+const User = require('../models/User');
+const Project = require('../models/Project');
+const Task = require('../models/Task');
+const bcrypt = require('bcryptjs');
 
-// Create Sequelize instance
-const db = new Sequelize({
-  dialect: 'sqlite',
-  storage: `database/${process.env.DB_NAME}` || 'database/task_management.db',
-  logging: console.log
-});
+const setupDatabase = async () => {
+  try {
+    console.log('Setting up database...');
 
-// Define Project model
-const Project = db.define('Project', {
-    id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
-    },
-    name: {
-        type: DataTypes.STRING,
-        allowNull: false
-    },
-    description: {
-        type: DataTypes.TEXT
-    },
-    status: {
-        type: DataTypes.STRING,
-        defaultValue: 'active'
-    },
-    dueDate: {
-        type: DataTypes.DATE
-    },
-    userId: {
-        type: DataTypes.INTEGER,
-        allowNull: false
-    }
-});
+    // Sync all models and recreate tables
+    await sequelize.sync({ force: true });
+    console.log('✅ Database synced successfully.');
 
-// Define Task model
-const Task = db.define('Task', {
-    id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
-    },
-    title: {
-        type: DataTypes.STRING,
-        allowNull: false
-    },
-    description: {
-        type: DataTypes.TEXT
-    },
-    completed: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false
-    },
-    priority: {
-        type: DataTypes.STRING,
-        defaultValue: 'medium'
-    },
-    dueDate: {
-        type: DataTypes.DATE
-    },
-    projectId: {
-        type: DataTypes.INTEGER,
-        allowNull: false
-    }
-});
+    // --------------------
+    // Seed Users with hashed passwords
+    // --------------------
+    const hashedPassword1 = await bcrypt.hash('password123', 10);
+    const hashedPassword2 = await bcrypt.hash('password456', 10);
 
-// Export for use in other files
-module.exports = { db, Project, Task };
+    const user1 = await User.create({
+      username: 'alice',
+      email: 'alice@example.com',
+      password: hashedPassword1
+    });
 
-// Create database and tables
-async function setupDatabase() {
-    try {
-        await db.authenticate();
-        console.log('Connection to database established successfully.');
-        
-        await db.sync({ force: true });
-        console.log('Database and tables created successfully.');
-        
-        await db.close();
-    } catch (error) {
-        console.error('Unable to connect to the database:', error);
-    }
-}
+    const user2 = await User.create({
+      username: 'bob',
+      email: 'bob@example.com',
+      password: hashedPassword2
+    });
 
-// Run setup if this file is executed directly
-if (require.main === module) {
-    setupDatabase();
-}
+    console.log('✅ Users created.');
+
+    // --------------------
+    // Seed Projects
+    // --------------------
+    const project1 = await Project.create({
+      title: 'Alice Project 1',
+      description: 'First project for Alice',
+      userId: user1.id
+    });
+
+    const project2 = await Project.create({
+      title: 'Bob Project 1',
+      description: 'First project for Bob',
+      userId: user2.id
+    });
+
+    console.log('✅ Projects created.');
+
+    // --------------------
+    // Seed Tasks
+    // --------------------
+    await Task.create({
+      title: 'Alice Task 1',
+      completed: false,
+      projectId: project1.id
+    });
+
+    await Task.create({
+      title: 'Alice Task 2',
+      completed: true,
+      projectId: project1.id
+    });
+
+    await Task.create({
+      title: 'Bob Task 1',
+      completed: false,
+      projectId: project2.id
+    });
+
+    console.log('✅ Tasks created.');
+    console.log('🎉 Database setup complete!');
+
+  } catch (err) {
+    console.error('Error setting up database:', err);
+  } finally {
+    await sequelize.close();
+    console.log('Database connection closed.');
+  }
+};
+
+setupDatabase();
